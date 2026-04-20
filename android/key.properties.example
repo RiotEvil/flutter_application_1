@@ -1,0 +1,12 @@
+# Copy this file to android/key.properties for local release builds.
+# Do not commit android/key.properties with real secrets.
+# In CI/CD prefer environment variables:
+# ANDROID_SIGNING_KEYALIAS
+# ANDROID_SIGNING_KEYPASSWORD
+# ANDROID_SIGNING_STOREFILE
+# ANDROID_SIGNING_STOREPASSWORD
+
+keyAlias=your_key_alias
+keyPassword=your_key_password
+storeFile=../app/release.jks
+storePassword=your_store_password

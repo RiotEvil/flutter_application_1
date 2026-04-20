@@ -1,0 +1,229 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function currentUid() {
+      return request.auth.uid;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(currentUid()));
+    }
+
+    function userOrgId() {
+      return userDoc().data.orgId;
+    }
+
+    function hasOrgAccess(orgId) {
+      return isSignedIn() && userOrgId() == orgId;
+    }
+
+    function hasAdminRights() {
+      return isSignedIn() &&
+          (userDoc().data.role == 'director' ||
+              userDoc().data.role == 'masterOwner');
+    }
+
+    function userRole() {
+      return userDoc().data.role;
+    }
+
+    function canWriteOrderData(data) {
+      return data.assignedToUid == null ||
+          data.assignedToUid == '' ||
+          data.assignedToUid == currentUid();
+    }
+
+    function canMasterCreateOrder() {
+      return userRole() == 'master' && canWriteOrderData(request.resource.data);
+    }
+
+    function canMasterUpdateOrder() {
+      return userRole() == 'master' &&
+          canWriteOrderData(resource.data) &&
+          canWriteOrderData(request.resource.data);
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && (currentUid() == userId || hasAdminRights());
+      // Block creating user profile with sensitive access/billing fields.
+      allow create: if isSignedIn() && currentUid() == userId
+          && !request.resource.data.keys().hasAny([
+            'role',
+            'orgId',
+            'plan',
+            'planStatus',
+            'billingProvider',
+          ]);
+      // Prevent self-escalation and client-side billing tampering.
+      // Access/billing fields are managed by secure backend flows.
+      allow update: if isSignedIn() && currentUid() == userId
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'role',
+            'orgId',
+            'plan',
+            'planStatus',
+            'billingProvider',
+          ]);
+      allow delete: if false;
+    }
+
+    match /public_users/{userId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && currentUid() == userId;
+      allow delete: if false;
+    }
+
+    match /organizations/{orgId} {
+      allow read: if hasOrgAccess(orgId);
+      allow create: if isSignedIn() && request.resource.data.ownerId == currentUid();
+      allow update: if hasOrgAccess(orgId) && hasAdminRights();
+      allow delete: if false;
+    }
+
+    // ── Orders ──────────────────────────────────────────────────────
+    // All org members can READ, CREATE and UPDATE.
+    // Only directors / owners may DELETE.
+    match /organizations/{orgId}/orders/{orderId} {
+      allow read: if hasOrgAccess(orgId);
+      allow create: if hasOrgAccess(orgId) && (hasAdminRights() || canMasterCreateOrder());
+      allow delete: if hasOrgAccess(orgId) && hasAdminRights();
+      allow update: if hasOrgAccess(orgId) && (hasAdminRights() || canMasterUpdateOrder());
+    }
+
+    // ── Clients ─────────────────────────────────────────────────────
+    // All org members can READ, CREATE and UPDATE clients.
+    // Only admins may DELETE clients.
+    match /organizations/{orgId}/clients/{clientId} {
+      allow read: if hasOrgAccess(orgId);
+      allow create, update: if hasOrgAccess(orgId);
+      allow delete: if hasOrgAccess(orgId) && hasAdminRights();
+    }
+
+    // ── Inventory ───────────────────────────────────────────────────
+    // All org members can READ inventory.
+    // Admins can do full CRUD; masters can only UPDATE (restock / status).
+    match /organizations/{orgId}/inventory/{itemId} {
+      allow read: if hasOrgAccess(orgId);
+      allow create, delete: if hasOrgAccess(orgId) && hasAdminRights();
+      allow update: if hasOrgAccess(orgId) && hasAdminRights();
+    }
+
+    match /organizations/{orgId}/services/{serviceId} {
+      allow read: if hasOrgAccess(orgId);
+      allow create, update, delete: if hasOrgAccess(orgId) && hasAdminRights();
+    }
+
+    match /organizations/{orgId}/chat_rooms/{roomId} {
+      // Internal organization room: all organization members can participate.
+      allow read, create, update: if hasOrgAccess(orgId);
+      allow delete: if hasOrgAccess(orgId) && hasAdminRights();
+
+      match /messages/{messageId} {
+        allow read, create: if hasOrgAccess(orgId);
+        allow update, delete: if false;
+      }
+    }
+
+    match /organizations/{orgId}/{collection}/{docId} {
+      allow read: if hasOrgAccess(orgId);
+      allow create, update, delete: if hasOrgAccess(orgId) && hasAdminRights();
+    }
+
+    match /chat_rooms/{roomId} {
+      // read/update: user must already be a participant
+      allow read, update: if isSignedIn() &&
+          request.auth.uid in resource.data.participantIds;
+      // create: creator must include themselves as participant
+      allow create: if isSignedIn() &&
+          request.auth.uid in request.resource.data.participantIds;
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn() &&
+            request.auth.uid in get(/databases/$(database)/documents/chat_rooms/$(roomId)).data.participantIds;
+        allow create: if isSignedIn() &&
+            request.auth.uid in get(/databases/$(database)/documents/chat_rooms/$(roomId)).data.participantIds;
+        allow update, delete: if false;
+      }
+    }
+
+    // ── Public online booking requests ─────────────────────────────
+    // Clients can submit requests without authentication.
+    // Only the target specialist (masterUid) can read and update status.
+    match /booking_requests/{requestId} {
+      allow create: if request.resource.data.masterUid is string
+        && request.resource.data.masterUid.size() > 0
+          && request.resource.data.masterUid.size() <= 128
+        && request.resource.data.clientName is string
+          && request.resource.data.clientName.size() > 0
+          && request.resource.data.clientName.size() <= 100
+        && (!('clientPhone' in request.resource.data)
+          || request.resource.data.clientPhone == null
+          || (request.resource.data.clientPhone is string
+            && request.resource.data.clientPhone.size() <= 30))
+        && (!('clientEmail' in request.resource.data)
+          || request.resource.data.clientEmail == null
+          || (request.resource.data.clientEmail is string
+            && request.resource.data.clientEmail.size() <= 120))
+        && request.resource.data['service'] is string
+          && request.resource.data['service'].size() > 0
+          && request.resource.data['service'].size() <= 200
+        && request.resource.data.car is string
+          && request.resource.data.car.size() > 0
+          && request.resource.data.car.size() <= 100
+        && (!('note' in request.resource.data)
+          || request.resource.data.note == null
+          || (request.resource.data.note is string
+            && request.resource.data.note.size() <= 1000))
+        && (!('preferredDate' in request.resource.data)
+          || request.resource.data.preferredDate == null
+          || (request.resource.data.preferredDate is string
+            && request.resource.data.preferredDate.size() <= 32))
+        && (!('preferredTime' in request.resource.data)
+          || request.resource.data.preferredTime == null
+          || (request.resource.data.preferredTime is string
+            && request.resource.data.preferredTime.size() <= 32))
+        && (!('locale' in request.resource.data)
+          || request.resource.data.locale == null
+          || (request.resource.data.locale is string
+            && request.resource.data.locale.size() <= 10))
+        && (!('source' in request.resource.data)
+          || request.resource.data.source == null
+          || (request.resource.data.source is string
+            && request.resource.data.source.size() <= 40))
+          && request.resource.data.status == 'pending'
+          // Restrict allowed fields to prevent arbitrary data injection
+          && request.resource.data.keys().hasOnly([
+          'masterUid', 'clientName', 'clientPhone', 'clientEmail',
+          'service', 'car', 'status', 'createdAt', 'note',
+          'preferredDate', 'preferredTime', 'locale', 'source'
+          ]);
+
+      allow read, update: if isSignedIn() &&
+          resource.data.masterUid == currentUid();
+
+      allow delete: if false;
+    }
+
+    // ── Invite codes ─────────────────────────────────────────────────
+    // Any authenticated user can read an invite (to validate on registration).
+    // Only directors / owners may create new invites.
+    // Any authenticated user may claim (mark as used) an unused invite —
+    //   the rule guards against double-use via resource.data.used == false.
+    match /invites/{code} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && hasAdminRights();
+      // Only allow claiming an unused invite; restrict changeable fields
+      // to prevent tampering with orgId/role after claiming.
+      allow update: if isSignedIn()
+          && resource.data.used == false
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['used', 'usedBy', 'usedAt']);
+      allow delete: if false;
+    }
+  }
+}

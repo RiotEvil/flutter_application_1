@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "802635202251",
+    "project_id": "detailing-pro",
+    "storage_bucket": "detailing-pro.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:802635202251:android:84066464baf8d44947654e",
+        "android_client_info": {
+          "package_name": "com.detailing.business.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "802635202251-usso61km75hmage4curm6tdm3i6baqdv.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.detailing.business.app",
+            "certificate_hash": "404a4c6e557640410a715c7fda682047b7d8f5bc"
+          }
+        },
+        {
+          "client_id": "802635202251-r85tlha23jths01s2gf3cqskkvcod7v3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB7zvcWiWge7MtwLMN50R4tJVTSZ5dgIwY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "802635202251-r85tlha23jths01s2gf3cqskkvcod7v3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

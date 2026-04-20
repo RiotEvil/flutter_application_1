@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Detailing Pro Booking</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+    <style>
+        :root {
+            --bg: radial-gradient(circle at 20% 0%, #1f2a44 0%, #0f1424 45%, #090d18 100%);
+            --card: rgba(14, 20, 36, 0.85);
+            --border: rgba(255, 255, 255, 0.14);
+            --text: #eef3ff;
+            --muted: #9eaac8;
+            --accent: #ffa726;
+            --ok: #22c55e;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--text);
+            background: var(--bg);
+            display: grid;
+            place-items: center;
+            padding: 18px;
+        }
+
+        .card {
+            width: min(680px, 100%);
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 22px;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45);
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.65rem;
+        }
+
+        p {
+            color: var(--muted);
+            margin-top: 8px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.9rem;
+        }
+
+        input,
+        textarea,
+        button {
+            width: 100%;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text);
+            padding: 11px 12px;
+            font-size: 0.95rem;
+        }
+
+        textarea {
+            min-height: 84px;
+            resize: vertical;
+        }
+
+        button {
+            border: none;
+            background: linear-gradient(135deg, #ffb547 0%, #ff8f1f 100%);
+            color: #1f1605;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.7;
+            cursor: wait;
+        }
+
+        .status {
+            margin-top: 12px;
+            font-size: 0.92rem;
+            color: var(--muted);
+        }
+
+        .master-badge {
+            display: inline-flex;
+            align-items: center;
+            margin: 0 0 18px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(255, 167, 38, 0.14);
+            border: 1px solid rgba(255, 167, 38, 0.28);
+            color: #ffd08a;
+            font-size: 0.92rem;
+            font-weight: 600;
+        }
+
+        .status.ok {
+            color: var(--ok);
+        }
+
+        .calendar-wrap {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .flatpickr-calendar.inline {
+            box-shadow: none;
+            border: none;
+            width: 100%;
+            background: transparent;
+        }
+
+        .flatpickr-day {
+            color: var(--text);
+        }
+
+        .flatpickr-months .flatpickr-month,
+        .flatpickr-current-month .flatpickr-monthDropdown-months,
+        .flatpickr-weekday {
+            color: var(--text);
+        }
+
+        .flatpickr-day.selected,
+        .flatpickr-day.startRange,
+        .flatpickr-day.endRange,
+        .flatpickr-day.selected:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #1f1605;
+        }
+
+        .slots-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(95px, 1fr));
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .slot-btn {
+            padding: 9px 10px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text);
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .slot-btn.selected {
+            border-color: var(--accent);
+            background: rgba(255, 167, 38, 0.2);
+            color: #ffd79b;
+        }
+
+        .slot-btn:disabled {
+            opacity: 0.5;
+            cursor: default;
+        }
+
+        .hint {
+            font-size: 0.85rem;
+            color: var(--muted);
+            margin-top: 6px;
+        }
+
+        @media (max-width: 640px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h1 id="title">Book your detailing appointment</h1>
+        <p id="subtitle">Fill in the form and we will contact you shortly.</p>
+        <div id="masterBadge" class="master-badge" hidden></div>
+
+        <form id="bookingForm" class="grid">
+            <div class="full">
+                <label for="name" id="nameLabel">Your name</label>
+                <input id="name" name="name" required />
+            </div>
+
+            <div>
+                <label for="phone" id="phoneLabel">Phone (optional)</label>
+                <input id="phone" name="phone" type="tel" />
+            </div>
+
+            <div>
+                <label for="email" id="emailLabel">E-mail (for confirmation)</label>
+                <input id="email" name="email" type="email" />
+            </div>
+
+            <div class="full">
+                <label for="service" id="serviceLabel">Service</label>
+                <input id="service" name="service" placeholder="Polishing / Ceramic / Full detailing" required />
+            </div>
+
+            <div class="full">
+                <label for="car" id="carLabel">Car</label>
+                <input id="car" name="car" placeholder="BMW X5 / ABC123" required />
+            </div>
+
+            <div>
+                <label for="date" id="dateLabel">Preferred date</label>
+                <div class="calendar-wrap">
+                    <input id="date" name="date" type="text" readonly required />
+                </div>
+            </div>
+
+            <div>
+                <label id="timeLabel">Preferred time</label>
+                <div id="timeSlots" class="slots-grid"></div>
+                <div id="timeHint" class="hint"></div>
+                <input id="time" name="time" type="hidden" required />
+            </div>
+
+            <div class="full">
+                <label for="note" id="noteLabel">Note (optional)</label>
+                <textarea id="note" name="note"></textarea>
+            </div>
+
+            <div class="full">
+                <button id="submitBtn" type="submit">Send request</button>
+            </div>
+        </form>
+
+        <div id="status" class="status"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
+        import {
+            getFirestore,
+            collection,
+            addDoc,
+            serverTimestamp,
+        } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+        // ── EmailJS ─────────────────────────────────────────────────────────
+        // Free email confirmations (200/month): https://www.emailjs.com
+        // 1. Register → Account → API Keys → copy Public Key
+        // 2. Add Email Service (Gmail/Outlook) → copy Service ID
+        // 3. Create Email Template with vars:
+        //    {{to_name}} {{to_email}} {{service}} {{car}} {{date}} {{time}} {{note}}
+        // 4. Replace the three placeholder values below, then re-deploy.
+        const EMAILJS_PUBLIC_KEY = 'YOUR_PUBLIC_KEY';
+        const EMAILJS_SERVICE_ID = 'YOUR_SERVICE_ID';
+        const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID';
+        const EMAIL_ENABLED = EMAILJS_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY';
+        // ────────────────────────────────────────────────────────────────────
+
+        const textMap = {
+            en: {
+                title: 'Book your detailing appointment',
+                subtitle: 'Fill in the form and we will contact you shortly.',
+                nameLabel: 'Your name',
+                phoneLabel: 'Phone (optional)',
+                emailLabel: 'E-mail (for confirmation)',
+                serviceLabel: 'Service',
+                carLabel: 'Car',
+                dateLabel: 'Preferred date',
+                timeLabel: 'Preferred time',
+                noteLabel: 'Note (optional)',
+                send: 'Send request',
+                success: '✅ Request sent! We will contact you soon.',
+                loading: 'Sending… please wait.',
+                invalid: 'Booking link is invalid. Missing master ID.',
+            },
+            pl: {
+                title: 'Umów wizytę na detailing',
+                subtitle: 'Wypełnij formularz, a skontaktujemy się z Tobą.',
+                nameLabel: 'Twoje imię',
+                phoneLabel: 'Telefon (opcjonalnie)',
+                emailLabel: 'E-mail (do potwierdzenia)',
+                serviceLabel: 'Usługa',
+                carLabel: 'Samochód',
+                dateLabel: 'Preferowana data',
+                timeLabel: 'Preferowana godzina',
+                noteLabel: 'Uwagi (opcjonalnie)',
+                send: 'Wyślij zgłoszenie',
+                success: '✅ Zgłoszenie wysłane! Skontaktujemy się wkrótce.',
+                loading: 'Wysyłanie… prosimy czekać.',
+                invalid: 'Link jest niepoprawny. Brak ID specjalisty.',
+            },
+            de: {
+                title: 'Detailing-Termin buchen',
+                subtitle: 'Füllen Sie das Formular aus, wir melden uns bald.',
+                nameLabel: 'Ihr Name',
+                phoneLabel: 'Telefon (optional)',
+                emailLabel: 'E-Mail (für Bestätigung)',
+                serviceLabel: 'Dienstleistung',
+                carLabel: 'Fahrzeug',
+                dateLabel: 'Wunschdatum',
+                timeLabel: 'Wunschzeit',
+                noteLabel: 'Hinweis (optional)',
+                send: 'Anfrage senden',
+                success: '✅ Anfrage gesendet! Wir melden uns bald.',
+                loading: 'Wird gesendet…',
+                invalid: 'Ungültiger Buchungslink.',
+            },
+            it: {
+                title: 'Prenota detailing',
+                subtitle: 'Compila il modulo, ti contatteremo presto.',
+                nameLabel: 'Il tuo nome',
+                phoneLabel: 'Telefono (opzionale)',
+                emailLabel: 'E-mail (per conferma)',
+                serviceLabel: 'Servizio',
+                carLabel: 'Veicolo',
+                dateLabel: 'Data preferita',
+                timeLabel: 'Orario preferito',
+                noteLabel: 'Note (opzionale)',
+                send: 'Invia richiesta',
+                success: '✅ Richiesta inviata! Ti contatteremo presto.',
+                loading: 'Invio in corso…',
+                invalid: 'Link non valido.',
+            },
+            es: {
+                title: 'Reserva tu detailing',
+                subtitle: 'Rellena el formulario y te contactaremos pronto.',
+                nameLabel: 'Tu nombre',
+                phoneLabel: 'Teléfono (opcional)',
+                emailLabel: 'E-mail (para confirmación)',
+                serviceLabel: 'Servicio',
+                carLabel: 'Vehículo',
+                dateLabel: 'Fecha preferida',
+                timeLabel: 'Hora preferida',
+                noteLabel: 'Nota (opcional)',
+                send: 'Enviar solicitud',
+                success: '✅ Solicitud enviada! Te contactaremos pronto.',
+                loading: 'Enviando…',
+                invalid: 'Enlace inválido.',
+            },
+            pt: {
+                title: 'Agendar detailing',
+                subtitle: 'Preencha o formulário e entraremos em contato.',
+                nameLabel: 'Seu nome',
+                phoneLabel: 'Telefone (opcional)',
+                emailLabel: 'E-mail (para confirmação)',
+                serviceLabel: 'Serviço',
+                carLabel: 'Veículo',
+                dateLabel: 'Data preferida',
+                timeLabel: 'Horário preferido',
+                noteLabel: 'Observação (opcional)',
+                send: 'Enviar pedido',
+                success: '✅ Pedido enviado! Entraremos em contato.',
+                loading: 'Enviando…',
+                invalid: 'Link inválido.',
+            },
+            uk: {
+                title: 'Записатись на детейлінг',
+                subtitle: 'Заповніть форму, і ми зв\'яжемось з вами.',
+                nameLabel: 'Ваше ім\'я',
+                phoneLabel: 'Телефон (необов\'язково)',
+                emailLabel: 'E-mail (для підтвердження)',
+                serviceLabel: 'Послуга',
+                carLabel: 'Автомобіль',
+                dateLabel: 'Бажана дата',
+                timeLabel: 'Бажаний час',
+                noteLabel: 'Коментар (необов\'язково)',
+                send: 'Надіслати заявку',
+                success: '✅ Заявку надіслано! Ми зв\'яжемось з вами.',
+                loading: 'Надсилання…',
+                invalid: 'Недійсне посилання.',
+            },
+            ru: {
+                title: 'Записаться на детейлинг',
+                subtitle: 'Заполните форму, и мы скоро свяжемся с вами.',
+                nameLabel: 'Ваше имя',
+                phoneLabel: 'Телефон (необязательно)',
+                emailLabel: 'E-mail (для подтверждения)',
+                serviceLabel: 'Услуга',
+                carLabel: 'Автомобиль',
+                dateLabel: 'Желаемая дата',
+                timeLabel: 'Желаемое время',
+                noteLabel: 'Комментарий (необязательно)',
+                send: 'Отправить заявку',
+                success: '✅ Заявка отправлена! Мы скоро свяжемся с вами.',
+                loading: 'Отправка… пожалуйста, подождите.',
+                invalid: 'Некорректная ссылка.',
+            },
+            tr: {
+                title: 'Detailing randevusu al',
+                subtitle: 'Formu doldurun, kısa sürede sizi arayacağız.',
+                nameLabel: 'Adınız',
+                phoneLabel: 'Telefon (isteğe bağlı)',
+                emailLabel: 'E-posta (onay için)',
+                serviceLabel: 'Hizmet',
+                carLabel: 'Araç',
+                dateLabel: 'Tercih edilen tarih',
+                timeLabel: 'Tercih edilen saat',
+                noteLabel: 'Not (isteğe bağlı)',
+                send: 'Talep gönder',
+                success: '✅ Talebiniz gönderildi!',
+                loading: 'Gönderiliyor…',
+                invalid: 'Geçersiz bağlantı.',
+            },
+        };
+
+        // Client's browser/phone language is used first; URL locale param is a fallback.
+        const params = new URLSearchParams(window.location.search);
+        const lang = (navigator.language || params.get('locale') || 'en').slice(0, 2);
+        const t = textMap[lang] || textMap.en;
+        const tr = (key, fallback) => t[key] || fallback;
+        const masterName = (params.get('name') || '').trim();
+
+        document.getElementById('title').textContent = t.title;
+        document.getElementById('subtitle').textContent = t.subtitle;
+        document.getElementById('nameLabel').textContent = t.nameLabel;
+        document.getElementById('phoneLabel').textContent = t.phoneLabel;
+        document.getElementById('emailLabel').textContent = t.emailLabel;
+        document.getElementById('serviceLabel').textContent = t.serviceLabel;
+        document.getElementById('carLabel').textContent = t.carLabel;
+        document.getElementById('dateLabel').textContent = t.dateLabel;
+        document.getElementById('timeLabel').textContent = t.timeLabel;
+        document.getElementById('noteLabel').textContent = t.noteLabel;
+        document.getElementById('submitBtn').textContent = t.send;
+
+        if (masterName) {
+            const masterBadge = document.getElementById('masterBadge');
+            masterBadge.hidden = false;
+            masterBadge.textContent = masterName;
+            document.title = `Detailing Pro | ${masterName}`;
+        }
+
+        const firebaseConfig = {
+            apiKey: 'AIzaSyD9XG97zUU2JlOWjN336-rEgP03UQBeWTY',
+            authDomain: 'detailing-pro.firebaseapp.com',
+            projectId: 'detailing-pro',
+            storageBucket: 'detailing-pro.firebasestorage.app',
+            messagingSenderId: '802635202251',
+            appId: '1:802635202251:web:6888cf2faf8d44d847654e',
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const masterUid = params.get('uid');
+
+        const form = document.getElementById('bookingForm');
+        const statusEl = document.getElementById('status');
+        const submitBtn = document.getElementById('submitBtn');
+        const dateInput = document.getElementById('date');
+        const timeInput = document.getElementById('time');
+        const timeSlotsEl = document.getElementById('timeSlots');
+        const timeHintEl = document.getElementById('timeHint');
+        const serviceInput = document.getElementById('service');
+
+        const AVAILABILITY_URL = 'https://europe-west3-detailing-pro.cloudfunctions.net/getBookingAvailability';
+        const DEFAULT_SERVICE_MINUTES = Number(params.get('serviceMinutes')) > 0
+            ? Number(params.get('serviceMinutes'))
+            : 120;
+
+        let selectedDate = '';
+        let selectedTime = '';
+        let currentMonth = '';
+        let slotsByDate = {};
+        let enabledDates = [];
+        let calendar = null;
+
+        function monthKey(date) {
+            const y = date.getUTCFullYear();
+            const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+            return `${y}-${m}`;
+        }
+
+        function selectedServiceMinutes() {
+            const raw = serviceInput.value.trim();
+            if (!raw) return DEFAULT_SERVICE_MINUTES;
+
+            const explicit = /([1-9][0-9]{0,2})\s*min/i.exec(raw);
+            if (explicit) {
+                return Math.max(30, Math.min(480, Number(explicit[1])));
+            }
+
+            // Fallback heuristic by service keywords.
+            const lower = raw.toLowerCase();
+            if (lower.includes('wash') || lower.includes('мойк')) return 60;
+            if (lower.includes('polish') || lower.includes('полир')) return 180;
+            if (lower.includes('ceram') || lower.includes('керам')) return 240;
+            return DEFAULT_SERVICE_MINUTES;
+        }
+
+        function clearSelectedTime() {
+            selectedTime = '';
+            timeInput.value = '';
+        }
+
+        function renderTimeSlots() {
+            const slots = selectedDate ? (slotsByDate[selectedDate] || []) : [];
+            timeSlotsEl.innerHTML = '';
+            clearSelectedTime();
+
+            if (!selectedDate) {
+                timeHintEl.textContent = tr('availabilityPickDate', 'Choose a date to see available time slots.');
+                return;
+            }
+
+            if (slots.length === 0) {
+                timeHintEl.textContent = tr('availabilityNoSlotsForDate', 'No free slots for this date.');
+                return;
+            }
+
+            timeHintEl.textContent = tr('availabilityPickTime', 'Select one of the available times.');
+
+            for (const slot of slots) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'slot-btn';
+                btn.textContent = slot;
+                btn.addEventListener('click', () => {
+                    selectedTime = slot;
+                    timeInput.value = slot;
+                    for (const sibling of timeSlotsEl.querySelectorAll('.slot-btn')) {
+                        sibling.classList.toggle('selected', sibling === btn);
+                    }
+                });
+                timeSlotsEl.appendChild(btn);
+            }
+        }
+
+        async function loadAvailabilityForMonth(month) {
+            if (!masterUid) return;
+
+            const url = new URL(AVAILABILITY_URL);
+            url.searchParams.set('masterUid', masterUid);
+            url.searchParams.set('month', month);
+            url.searchParams.set('serviceMinutes', String(selectedServiceMinutes()));
+            url.searchParams.set('timezone', Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Warsaw');
+
+            timeHintEl.textContent = tr('availabilityLoading', 'Loading available time slots...');
+
+            const response = await fetch(url.toString());
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(text || `Availability error (${response.status})`);
+            }
+
+            const data = await response.json();
+            slotsByDate = data.slotsByDate || {};
+            enabledDates = Array.isArray(data.availableDates) ? data.availableDates : [];
+
+            if (calendar) {
+                calendar.set('enable', enabledDates);
+                if (selectedDate && !enabledDates.includes(selectedDate)) {
+                    selectedDate = '';
+                    dateInput.value = '';
+                }
+            }
+
+            renderTimeSlots();
+        }
+
+        function ensureCalendar() {
+            if (calendar) return;
+
+            const today = new Date();
+            currentMonth = monthKey(today);
+
+            calendar = window.flatpickr(dateInput, {
+                inline: true,
+                minDate: 'today',
+                dateFormat: 'Y-m-d',
+                disableMobile: true,
+                enable: [],
+                onMonthChange: async (_, __, inst) => {
+                    const month = monthKey(new Date(Date.UTC(inst.currentYear, inst.currentMonth, 1)));
+                    if (month === currentMonth) return;
+                    currentMonth = month;
+                    try {
+                        await loadAvailabilityForMonth(month);
+                    } catch (err) {
+                        timeHintEl.textContent = String(err?.message || err);
+                    }
+                },
+                onYearChange: async (_, __, inst) => {
+                    const month = monthKey(new Date(Date.UTC(inst.currentYear, inst.currentMonth, 1)));
+                    if (month === currentMonth) return;
+                    currentMonth = month;
+                    try {
+                        await loadAvailabilityForMonth(month);
+                    } catch (err) {
+                        timeHintEl.textContent = String(err?.message || err);
+                    }
+                },
+                onChange: (selectedDates) => {
+                    selectedDate = selectedDates.length
+                        ? selectedDates[0].toISOString().slice(0, 10)
+                        : '';
+                    dateInput.value = selectedDate;
+                    renderTimeSlots();
+                },
+            });
+        }
+
+        if (!masterUid) {
+            statusEl.textContent = t.invalid;
+            form.style.display = 'none';
+        } else {
+            ensureCalendar();
+            loadAvailabilityForMonth(currentMonth)
+                .catch((err) => {
+                    timeHintEl.textContent = String(err?.message || err);
+                });
+
+            serviceInput.addEventListener('change', () => {
+                if (!currentMonth) return;
+                loadAvailabilityForMonth(currentMonth)
+                    .catch((err) => {
+                        timeHintEl.textContent = String(err?.message || err);
+                    });
+            });
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!masterUid) return;
+
+            if (!selectedDate || !selectedTime) {
+                statusEl.className = 'status';
+                statusEl.textContent = tr('availabilitySelectDateTime', 'Please select a free date and time from the calendar.');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            statusEl.className = 'status';
+            statusEl.textContent = t.loading;
+
+            const clientEmail = document.getElementById('email').value.trim();
+
+            const payload = {
+                masterUid,
+                clientName: document.getElementById('name').value.trim(),
+                clientPhone: document.getElementById('phone').value.trim() || null,
+                clientEmail: clientEmail || null,
+                service: document.getElementById('service').value.trim(),
+                car: document.getElementById('car').value.trim(),
+                preferredDate: selectedDate,
+                preferredTime: selectedTime,
+                note: document.getElementById('note').value.trim(),
+                locale: lang,
+                status: 'pending',
+                createdAt: serverTimestamp(),
+                source: 'web-booking',
+            };
+
+            try {
+                await addDoc(collection(db, 'booking_requests'), payload);
+
+                // Send confirmation e-mail via EmailJS (non-critical).
+                if (EMAIL_ENABLED && clientEmail) {
+                    try {
+                        await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                service_id: EMAILJS_SERVICE_ID,
+                                template_id: EMAILJS_TEMPLATE_ID,
+                                user_id: EMAILJS_PUBLIC_KEY,
+                                template_params: {
+                                    to_name: payload.clientName,
+                                    to_email: clientEmail,
+                                    service: payload.service,
+                                    car: payload.car,
+                                    date: payload.preferredDate,
+                                    time: payload.preferredTime,
+                                    note: payload.note || '—',
+                                },
+                            }),
+                        });
+                    } catch (_) {
+                        // Email failure is non-critical — booking already saved.
+                    }
+                }
+
+                form.style.display = 'none';
+                statusEl.className = 'status ok';
+                statusEl.textContent = t.success;
+            } catch (err) {
+                statusEl.className = 'status';
+                statusEl.textContent = String(err?.message || err);
+                submitBtn.disabled = false;
+            }
+        });
+
+    </script>
+</body>
+
+</html>

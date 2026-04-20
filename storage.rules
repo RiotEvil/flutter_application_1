@@ -1,0 +1,26 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userOrgId() {
+      return firestore.get(
+        /databases/(default)/documents/users/$(request.auth.uid)
+      ).data.orgId;
+    }
+
+    function hasOrgAccess(orgId) {
+      return isSignedIn() && userOrgId() == orgId;
+    }
+
+    match /organizations/{orgId}/{allPaths=**} {
+      allow read, write: if hasOrgAccess(orgId);
+    }
+
+    match /chat/global/{allPaths=**} {
+      allow read, write: if isSignedIn();
+    }
+  }
+}
