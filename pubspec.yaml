@@ -36,6 +36,7 @@ dependencies:
   image: ^4.2.0
   flutter_secure_storage: ^9.2.4
   purchases_flutter: ^9.15.1
+  package_info_plus: ^9.0.1
 
 dev_dependencies:
   flutter_test:

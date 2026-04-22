@@ -14,12 +14,14 @@ import 'firebase_options.dart';
 import 'core/app_data_service.dart';
 import 'core/constants.dart';
 import 'core/cloud_profile_sync.dart';
+import 'core/force_update_service.dart';
 import 'core/hive_setup.dart';
 import 'core/notification_center.dart';
 import 'core/online_booking_service.dart';
 import 'core/order_reminder_service.dart';
 import 'core/revenuecat_service.dart';
 import 'core/theme.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_application_1/screens/main_navigation_screen.dart';
 import 'package:flutter_application_1/screens/auth_screen.dart';
 import 'package:flutter_application_1/screens/business_mode_screen.dart';
@@ -182,6 +184,7 @@ class _AuthGateState extends State<AuthGate> {
     _hydrateAccessProfileFromCloud();
     _bindAuthAndAccessWatchers();
     _requestFcmPermission();
+    _checkForUpdate();
   }
 
   @override
@@ -343,6 +346,20 @@ class _AuthGateState extends State<AuthGate> {
     }
   }
 
+  Future<void> _checkForUpdate() async {
+    final result = await ForceUpdateService.check();
+    if (!result.required) return;
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _ForceUpdateDialog(storeUrl: result.storeUrl),
+      );
+    });
+  }
+
   Future<void> _saveCurrentFcmToken() async {
     if (Firebase.apps.isEmpty) return;
     try {
@@ -451,6 +468,41 @@ class _AuthGateState extends State<AuthGate> {
           'auth',
         );
       },
+    );
+  }
+}
+
+class _ForceUpdateDialog extends StatelessWidget {
+  final String? storeUrl;
+
+  const _ForceUpdateDialog({this.storeUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+        title: const Text('Update required'),
+        content: const Text(
+          'A new version of the app is available. '
+          'Please update to continue using Detailing Pro.',
+        ),
+        actions: [
+          if (storeUrl != null && storeUrl!.isNotEmpty)
+            FilledButton(
+              onPressed: () => launchUrl(
+                Uri.parse(storeUrl!),
+                mode: LaunchMode.externalApplication,
+              ),
+              child: const Text('Update'),
+            )
+          else
+            FilledButton(
+              onPressed: () {},
+              child: const Text('Update'),
+            ),
+        ],
+      ),
     );
   }
 }

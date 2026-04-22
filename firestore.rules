@@ -211,6 +211,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ── App config (force-update version gates) ───────────────────────
+    // Publicly readable so the client can check before authentication.
+    match /app_config/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // ── Invite codes ─────────────────────────────────────────────────
     // Any authenticated user can read an invite (to validate on registration).
     // Only directors / owners may create new invites.
