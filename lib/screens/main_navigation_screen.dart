@@ -9,8 +9,6 @@ import 'inventory_screen.dart';
 import 'stats_screen.dart';
 import 'settings_screen.dart';
 import 'photos_screen.dart';
-import 'marketing_screen.dart';
-import 'chat_list_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   final BusinessMode businessMode;
@@ -71,15 +69,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         page: const PhotosScreen(),
       ),
       _NavItem(
-        icon: Icons.forum_outlined,
-        label: widget.businessMode == BusinessMode.team
-            ? l10n.navTeamChats
-            : l10n.navCommunityChat,
-        page: ChatListScreen(
-          isTeamMode: widget.businessMode == BusinessMode.team,
-        ),
-      ),
-      _NavItem(
         icon: Icons.settings,
         label: l10n.navSettings,
         page: const SettingsScreen(),
@@ -93,14 +82,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           icon: Icons.bar_chart,
           label: l10n.navStats,
           page: const StatsScreen(),
-        ),
-      );
-      items.insert(
-        7,
-        _NavItem(
-          icon: Icons.campaign,
-          label: l10n.navMarketing,
-          page: const MarketingScreen(),
         ),
       );
     }

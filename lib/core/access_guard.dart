@@ -10,7 +10,7 @@ class AccessGuard {
   AccessGuard._();
 
   static const int freeClientsLimit = 100;
-  static const int freeActiveOrdersPerMonthLimit = 30;
+  static const int freeActiveOrdersPerMonthLimit = 10;
 
   static BusinessMode? currentBusinessMode() {
     final settingsBox = Hive.box(HiveBoxes.settings);

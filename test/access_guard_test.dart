@@ -95,15 +95,15 @@ void main() {
     test('free plan: allows when below limit', () {
       _setPlan(AppPlan.free, PlanStatus.inactive);
       expect(
-        AccessGuard.canCreateOrderThisMonth(activeOrdersThisMonthCount: 29),
+        AccessGuard.canCreateOrderThisMonth(activeOrdersThisMonthCount: 9),
         isTrue,
       );
     });
 
-    test('free plan: blocks at exact limit (30)', () {
+    test('free plan: blocks at exact limit (10)', () {
       _setPlan(AppPlan.free, PlanStatus.inactive);
       expect(
-        AccessGuard.canCreateOrderThisMonth(activeOrdersThisMonthCount: 30),
+        AccessGuard.canCreateOrderThisMonth(activeOrdersThisMonthCount: 10),
         isFalse,
       );
     });
@@ -143,8 +143,8 @@ void main() {
       );
     });
 
-    test('limit constant is 30', () {
-      expect(AccessGuard.freeActiveOrdersPerMonthLimit, 30);
+    test('limit constant is 10', () {
+      expect(AccessGuard.freeActiveOrdersPerMonthLimit, 10);
     });
   });
 
