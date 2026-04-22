@@ -1,6 +1,6 @@
 const admin = require("firebase-admin");
 const {logger} = require("firebase-functions");
-const {onDocumentWritten} = require("firebase-functions/v2/firestore");
+const {onDocumentWritten, onDocumentCreated} = require("firebase-functions/v2/firestore");
 const {onRequest} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {defineSecret} = require("firebase-functions/params");
@@ -983,6 +983,95 @@ exports.onInventoryWritten = onDocumentWritten(
         entity: "inventory",
         entityId: itemId,
       },
+    });
+  },
+);
+
+// ── New booking request notification ────────────────────────────────────────
+// Fires when a client submits a booking request from the public booking page.
+// Notifies the target specialist (masterUid) via FCM push.
+exports.onBookingRequestCreated = onDocumentCreated(
+  {
+    document: "booking_requests/{requestId}",
+    region: REGION,
+  },
+  async (event) => {
+    const data = event.data.data();
+    const masterUid = data.masterUid;
+
+    if (!masterUid || typeof masterUid !== "string") {
+      logger.warn("onBookingRequestCreated: missing masterUid", {
+        requestId: event.params.requestId,
+      });
+      return;
+    }
+
+    const userSnap = await admin
+      .firestore()
+      .collection("users")
+      .doc(masterUid)
+      .get();
+
+    const userData = userSnap.data();
+    if (!userData) {
+      logger.warn("onBookingRequestCreated: user not found", {masterUid});
+      return;
+    }
+
+    const tokens = Array.isArray(userData.fcmTokens)
+      ? userData.fcmTokens.filter((t) => typeof t === "string" && t.trim().length > 0)
+      : [];
+
+    if (tokens.length === 0) {
+      logger.info("onBookingRequestCreated: no FCM tokens for master", {masterUid});
+      return;
+    }
+
+    const clientName = data.clientName || "Client";
+    const service = data.service || "";
+    const title = "New booking request";
+    const body = service
+      ? `${clientName} — ${service}`
+      : clientName;
+
+    const response = await admin.messaging().sendEachForMulticast({
+      tokens,
+      notification: {title, body},
+      data: {
+        type: "new_booking_request",
+        masterUid,
+        requestId: event.params.requestId,
+      },
+    });
+
+    // Cleanup invalid tokens
+    const invalidTokens = [];
+    response.responses.forEach((r, i) => {
+      if (!r.success && r.error) {
+        const code = r.error.code || "";
+        if (
+          code.includes("registration-token-not-registered") ||
+          code.includes("invalid-argument")
+        ) {
+          invalidTokens.push(tokens[i]);
+        }
+      }
+    });
+
+    if (invalidTokens.length > 0) {
+      await admin
+        .firestore()
+        .collection("users")
+        .doc(masterUid)
+        .update({
+          fcmTokens: admin.firestore.FieldValue.arrayRemove(...invalidTokens),
+        });
+    }
+
+    logger.info("onBookingRequestCreated: push sent", {
+      masterUid,
+      successCount: response.successCount,
+      requestId: event.params.requestId,
     });
   },
 );
