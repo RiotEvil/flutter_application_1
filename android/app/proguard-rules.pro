@@ -34,3 +34,19 @@
 # Preserve line numbers for crash reporting
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# flutter_local_notifications - Gson TypeToken fix
+# Gson uses generic type information stored in class files when working with
+# TypeToken. R8 removes such information by default, causing the crash:
+# "TypeToken must be created with a type argument"
+-keep class com.google.gson.reflect.TypeToken { *; }
+-keep class * extends com.google.gson.reflect.TypeToken
+
+# Keep Gson classes used for serialization of scheduled notifications
+-keep class com.google.gson.** { *; }
+-keepattributes EnclosingMethod
+-keepattributes InnerClasses
+
+# flutter_local_notifications plugin classes
+-keep class com.dexterous.flutterlocalnotifications.** { *; }
+-keepclassmembers class com.dexterous.flutterlocalnotifications.** { *; }
