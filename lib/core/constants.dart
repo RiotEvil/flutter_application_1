@@ -58,10 +58,7 @@ enum OrderStatus {
     if (name == null || name.isEmpty) return OrderStatus.scheduled;
     return OrderStatus.values.firstWhere(
       (e) => e.name == name,
-      orElse: () {
-        assert(false, 'Unknown OrderStatus "$name" — defaulting to scheduled');
-        return OrderStatus.scheduled;
-      },
+      orElse: () => OrderStatus.scheduled,
     );
   }
 }
