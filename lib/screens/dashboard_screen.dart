@@ -15,6 +15,7 @@ import 'add_job_screen.dart';
 import 'add_client_screen.dart';
 import 'jobs_screen.dart';
 import 'clients_screen.dart';
+import 'stats_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -24,13 +25,38 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // --- ЛОГИКА АВТОМАТИЧЕСКОГО СПИСАНИЯ ХИМИИ ---
+  late final _ordersListenable = Hive.box(HiveBoxes.orders).listenable();
+
+  @override
+  void initState() {
+    super.initState();
+    _ordersListenable.addListener(_syncReminders);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncReminders());
+  }
+
+  @override
+  void dispose() {
+    _ordersListenable.removeListener(_syncReminders);
+    super.dispose();
+  }
+
+  void _syncReminders() {
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    final oBox = Hive.box(HiveBoxes.orders);
+    final orders = oBox.keys.map((k) {
+      final raw = oBox.get(k);
+      if (raw is! Map) return null;
+      return Map<String, dynamic>.from(raw);
+    }).whereType<Map<String, dynamic>>();
+    OrderReminderService.syncForOrders(orders: orders, l10n: l10n).ignore();
+  }
+
   Future<void> _completeOrder(
     dynamic orderKey,
     Map orderData,
     AppLocalizations l10n,
   ) async {
-    // 1. Спрашиваем подтверждение
     final bool? confirmed = await ConfirmDialog.show(
       context: context,
       title: orderData['car'] ?? l10n.orderDefaultTitle,
@@ -43,7 +69,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final inventoryBox = Hive.box(HiveBoxes.inventory);
     final ordersBox = Hive.box(HiveBoxes.orders);
 
-    // 2. Ищем настройки услуги
+    // Снимок инвентаря для UNDO
+    final inventorySnapshot = <dynamic, Map<String, dynamic>>{
+      for (final k in inventoryBox.keys)
+        if (inventoryBox.get(k) is Map)
+          k: Map<String, dynamic>.from(inventoryBox.get(k)),
+    };
+    final originalOrder = Map<String, dynamic>.from(orderData);
+
+    // Списание химии
     final serviceNames = orderServiceList(orderData);
     for (final serviceName in serviceNames) {
       final service = servicesBox.values.firstWhere(
@@ -51,9 +85,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         orElse: () => null,
       );
 
-      if (service == null || service['chemistry'] == null) {
-        continue;
-      }
+      if (service == null || service['chemistry'] == null) continue;
 
       final chemRaw = service['chemistry'];
       if (chemRaw is! List) continue;
@@ -86,7 +118,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     }
 
-    // 3. Обновляем статус заказа
+    // Обновляем статус заказа
     final updatedOrder = Map<String, dynamic>.from(orderData);
     if ((updatedOrder['id']?.toString().isEmpty ?? true)) {
       updatedOrder['id'] = DateTime.now().microsecondsSinceEpoch.toString();
@@ -98,17 +130,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
       OrderReminderService.cancelForOrder(updatedOrder['id']?.toString()),
     );
 
-    // ВЫВОДИМ СНЭКБАР БЕЗ ИСПОЛЬЗОВАНИЯ l10n.ready
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            l10n.orderCompletedSnack(orderData['car']?.toString() ?? ''),
-          ),
-          backgroundColor: AppColors.success,
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          l10n.orderCompletedSnack(orderData['car']?.toString() ?? ''),
         ),
-      );
-    }
+        backgroundColor: AppColors.success,
+        duration: const Duration(seconds: 10),
+        action: SnackBarAction(
+          label: 'UNDO',
+          textColor: Colors.white,
+          onPressed: () async {
+            await ordersBox.put(orderKey, originalOrder);
+            unawaited(AppDataService.syncOrderToCloud(
+              Map<String, dynamic>.from(originalOrder),
+            ));
+            for (final entry in inventorySnapshot.entries) {
+              await inventoryBox.put(entry.key, entry.value);
+              unawaited(
+                AppDataService.syncInventoryItemToCloud(entry.value),
+              );
+            }
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -165,13 +212,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             final status = OrderStatus.fromName(o['status']?.toString());
             return status == OrderStatus.inProgress;
           }).toList();
-
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            OrderReminderService.syncForOrders(
-              orders: orderEntries.map((entry) => entry.value),
-              l10n: l10n,
-            ).ignore();
-          });
 
           double todayRevenue = 0;
           for (final order in todayOrders) {
@@ -242,6 +282,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 '${todayRevenue.toStringAsFixed(0)} $currency',
                             icon: Icons.payments,
                             color: AppColors.success,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const StatsScreen(),
+                              ),
+                            ),
                           ),
                           StatCard(
                             title: l10n.statsTotalClients,
