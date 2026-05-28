@@ -357,7 +357,12 @@ class AppDataService {
     final projectId = Firebase.app().options.projectId;
     if (projectId.isEmpty) return;
 
-    final idToken = await user.getIdToken();
+    String? idToken;
+    try {
+      idToken = await user.getIdToken();
+    } on FirebaseAuthException {
+      return;
+    }
     if (idToken == null || idToken.isEmpty) return;
 
     final uri = Uri.parse(

@@ -76,7 +76,12 @@ class InviteService {
       throw const InviteException('Unable to process invite request');
     }
 
-    final idToken = await user.getIdToken();
+    String? idToken;
+    try {
+      idToken = await user.getIdToken();
+    } on FirebaseAuthException {
+      throw const InviteException('Unable to process invite request');
+    }
     if (idToken == null || idToken.isEmpty) {
       throw const InviteException(
         'You do not have permission to perform this action',

@@ -83,7 +83,12 @@ class CloudProfileSync {
       throw Exception('setBusinessMode failed: missing projectId');
     }
 
-    final idToken = await user.getIdToken();
+    String? idToken;
+    try {
+      idToken = await user.getIdToken();
+    } on FirebaseAuthException catch (e) {
+      throw Exception('setBusinessMode failed: ${e.message}');
+    }
     if (idToken == null || idToken.isEmpty) {
       throw Exception('setBusinessMode failed: missing idToken');
     }
