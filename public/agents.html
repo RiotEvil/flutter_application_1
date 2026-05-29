@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>COMMAND CENTER — Detailing Pro</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&display=swap');
+
+:root {
+  --bg: #07080f;
+  --surface: rgba(255,255,255,0.035);
+  --border: rgba(255,255,255,0.07);
+  --nina:   #00e5ff;
+  --alex:   #69ff47;
+  --vic:    #f0618f;
+  --maria:  #f0a83a;
+  --kirill: #a870f5;
+  --text: rgba(255,255,255,0.88);
+  --muted: rgba(255,255,255,0.28);
+
+  /* Easing system — no built-in easings */
+  --ease-out:    cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+*, *::before, *::after {
+  margin: 0; padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'IBM Plex Mono', monospace;
+  overflow: hidden;
+}
+
+/* Grain — fixed pseudo-element only, never on scrolling containers */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 0; opacity: .26;
+}
+
+/* Ambient blobs — opacity reduced, no glow */
+.blob {
+  position: fixed; border-radius: 50%;
+  filter: blur(130px); pointer-events: none; z-index: 0; opacity: .07;
+}
+.b1 { width: 500px; height: 500px; top: -200px; left: -130px; background: #00e5ff; }
+.b2 { width: 400px; height: 400px; bottom: -170px; right: -90px; background: #a870f5; }
+
+/* App shell */
+.app {
+  position: relative; z-index: 1;
+  height: 100%; display: flex; flex-direction: column;
+}
+
+/* ── HEADER ── */
+.hdr {
+  flex-shrink: 0;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(7,8,15,0.9);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  display: flex; justify-content: space-between; align-items: center;
+  /* Liquid Glass: inner bottom line */
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,0.025);
+}
+
+.hdr-logo {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800; font-size: 12.5px;
+  letter-spacing: .22em; text-transform: uppercase; line-height: 1;
+}
+.hdr-logo span { opacity: .2; }
+
+.hdr-right {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 9px; letter-spacing: .1em; color: var(--muted);
+}
+
+.status-chip {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 10px 4px 7px;
+  border-radius: 99px;
+  border: 1px solid rgba(105,255,71,0.16);
+  background: rgba(105,255,71,0.055);
+  color: #69ff47;
+  font-size: 8.5px; letter-spacing: .1em;
+}
+
+.pulse {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: #69ff47;
+  /* Tinted, not neon — small, controlled glow */
+  box-shadow: 0 0 4px rgba(105,255,71,0.7);
+  animation: blink 2.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: .15; transform: scale(0.7); }
+}
+
+/* ── SCREENS — custom drawer easing ── */
+.screen {
+  position: absolute; inset: 0; top: 57px;
+  display: flex; flex-direction: column;
+  will-change: transform, opacity;
+  transition:
+    transform 380ms var(--ease-drawer),
+    opacity   300ms var(--ease-out);
+}
+.screen.hidden {
+  transform: translateX(106%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── LIST SCREEN ── */
+#listScreen {
+  overflow-y: auto;
+  padding: 14px 14px 24px;
+  gap: 9px;
+  display: flex; flex-direction: column;
+}
+#listScreen::-webkit-scrollbar { display: none; }
+
+/* Card stagger entrance — delay set inline via JS */
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.agent-card {
+  display: flex; align-items: stretch;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  position: relative; overflow: hidden;
+
+  /* Liquid Glass: inner top highlight + diffusion shadow */
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.07),
+    0 12px 28px -10px rgba(0,0,0,0.45);
+
+  animation: cardIn 480ms var(--ease-out) both;
+
+  /* Specific properties only — never transition: all */
+  transition:
+    border-color 220ms var(--ease-out),
+    background   220ms var(--ease-out),
+    box-shadow   220ms var(--ease-out),
+    transform    140ms var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .agent-card:hover {
+    border-color: rgba(255,255,255,0.10);
+    background: rgba(255,255,255,0.05);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.10),
+      0 18px 38px -10px rgba(0,0,0,0.55);
+  }
+  .agent-card:hover .card-accent { opacity: 1; }
+  .agent-card:hover .card-arrow {
+    opacity: .6;
+    transform: translateX(3px);
+  }
+}
+
+/* Tactile press: Y-axis + scale (physical push) */
+.agent-card:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+/* Spotlight Border Card — border illuminates at cursor position */
+.agent-card::before {
+  content: '';
+  position: absolute; inset: -1px;
+  border-radius: inherit;
+  background: radial-gradient(
+    180px circle at var(--mx, -999px) var(--my, -999px),
+    rgba(255,255,255,0.09),
+    transparent 70%
+  );
+  pointer-events: none; z-index: 0;
+  opacity: 0;
+  transition: opacity 300ms var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .agent-card:hover::before { opacity: 1; }
+}
+
+/* Left accent bar — DESIGN_VARIANCE: 8 asymmetric touch */
+.card-accent {
+  width: 3px; align-self: stretch;
+  border-radius: 3px 0 0 3px;
+  flex-shrink: 0;
+  background: var(--c);
+  opacity: .55;
+  transition: opacity 220ms var(--ease-out);
+}
+
+.card-inner {
+  display: flex; align-items: center;
+  gap: 14px; flex: 1;
+  padding: 14px 12px 14px 14px;
+}
+
+.card-body { flex: 1; min-width: 0; }
+
+.card-name {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800; font-size: 18px;
+  letter-spacing: -.015em; line-height: 1;
+}
+.card-role {
+  font-size: 8.5px; letter-spacing: .13em;
+  color: var(--muted); text-transform: uppercase; margin-top: 3px;
+}
+.card-tags {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 9px;
+}
+.tag {
+  font-size: 7.5px; letter-spacing: .06em;
+  padding: 2px 8px; border-radius: 99px; border: 1px solid;
+  opacity: .4;
+}
+.card-status {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 8px; letter-spacing: .1em;
+  color: var(--muted); margin-top: 8px;
+}
+.sdot {
+  width: 4px; height: 4px; border-radius: 50%;
+  animation: blink 2.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+/* Commander card — Nina, DESIGN_VARIANCE: 8 asymmetric featured */
+.agent-card.commander {
+  border-color: rgba(0,229,255,0.12);
+  background: rgba(0,229,255,0.025);
+  box-shadow:
+    inset 0 1px 0 rgba(0,229,255,0.1),
+    0 16px 40px -12px rgba(0,229,255,0.06),
+    0 12px 28px -10px rgba(0,0,0,0.5);
+}
+@media (hover: hover) and (pointer: fine) {
+  .agent-card.commander:hover {
+    border-color: rgba(0,229,255,0.22);
+    background: rgba(0,229,255,0.04);
+  }
+}
+.agent-card.commander .card-accent {
+  opacity: .9;
+}
+.agent-card.commander .card-inner {
+  padding: 18px 14px 18px 16px;
+  align-items: flex-start;
+}
+.agent-card.commander .card-name {
+  font-size: 23px;
+  letter-spacing: -.025em;
+}
+.agent-card.commander .card-body {
+  flex: 1;
+}
+.cmd-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 7px; letter-spacing: .18em;
+  padding: 2px 8px; border-radius: 99px;
+  border: 1px solid rgba(0,229,255,0.25);
+  background: rgba(0,229,255,0.07);
+  color: #00e5ff;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+.cmd-badge-dot {
+  width: 3px; height: 3px; border-radius: 50%;
+  background: #00e5ff;
+  box-shadow: 0 0 3px rgba(0,229,255,0.8);
+  animation: blink 2.4s ease-in-out infinite;
+}
+
+/* Error message state */
+.msg.error {
+  background: rgba(255,60,60,0.06);
+  border-color: rgba(255,60,60,0.18);
+  box-shadow: inset 0 1px 0 rgba(255,60,60,0.06);
+}
+.msg.error .msg-label { color: rgba(255,100,100,0.6); }
+
+.card-arrow {
+  color: var(--muted); font-size: 20px;
+  flex-shrink: 0; opacity: .22;
+  transition:
+    opacity   220ms var(--ease-out),
+    transform 220ms var(--ease-out);
+}
+
+/* ── CHAT SCREEN ── */
+#chatScreen { display: flex; flex-direction: column; }
+
+.chat-hdr {
+  flex-shrink: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(7,8,15,0.9);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  display: flex; align-items: center; gap: 12px;
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,0.02);
+}
+
+.back-btn {
+  width: 36px; height: 36px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 16px; color: var(--text); flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  transition:
+    background    150ms var(--ease-out),
+    border-color  150ms var(--ease-out),
+    transform     100ms var(--ease-out);
+}
+.back-btn:active { transform: translateY(1px) scale(0.93); }
+@media (hover: hover) and (pointer: fine) {
+  .back-btn:hover {
+    background: rgba(255,255,255,0.07);
+    border-color: rgba(255,255,255,0.13);
+  }
+}
+
+.chat-agent-info { flex: 1; }
+.chat-agent-name {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800; font-size: 16px;
+  letter-spacing: -.01em; line-height: 1;
+}
+.chat-agent-role {
+  font-size: 8px; letter-spacing: .14em;
+  color: var(--muted); text-transform: uppercase; margin-top: 3px;
+}
+
+/* Quick commands */
+.quick-cmds {
+  flex-shrink: 0;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto; white-space: nowrap;
+  display: flex; gap: 6px;
+}
+.quick-cmds::-webkit-scrollbar { display: none; }
+
+.qcmd {
+  display: inline-flex; align-items: center;
+  font-size: 10px; padding: 6px 12px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer; color: var(--text);
+  font-family: 'IBM Plex Mono', monospace;
+  white-space: nowrap; flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+  transition:
+    background    150ms var(--ease-out),
+    border-color  150ms var(--ease-out),
+    transform     100ms var(--ease-out);
+}
+.qcmd:active { transform: translateY(1px) scale(0.97); }
+@media (hover: hover) and (pointer: fine) {
+  .qcmd:hover {
+    border-color: var(--c);
+    background: rgba(255,255,255,0.055);
+  }
+}
+
+/* Messages */
+.msgs {
+  flex: 1; overflow-y: auto;
+  padding: 14px 14px 6px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.msgs::-webkit-scrollbar { display: none; }
+
+/* Empty state — beautifully composed */
+.msgs-empty {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  flex: 1; gap: 5px;
+  color: var(--muted);
+  font-size: 9px; letter-spacing: .12em; text-align: center;
+  padding: 32px;
+  animation: fadeIn 350ms 120ms var(--ease-out) both;
+  text-transform: uppercase;
+}
+.msgs-empty-icon {
+  margin-bottom: 6px; opacity: .22;
+}
+.msgs-empty-title { opacity: .65; }
+.msgs-empty-hint { opacity: .32; margin-top: 3px; letter-spacing: .08em; text-transform: none; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Message bubbles */
+.msg {
+  padding: 10px 13px;
+  border-radius: 16px;
+  font-size: 12.5px; line-height: 1.72;
+  max-width: 92%;
+  animation: fadeIn 200ms var(--ease-out) both;
+}
+
+.msg-label {
+  font-size: 7.5px; letter-spacing: .15em;
+  color: var(--muted); margin-bottom: 5px;
+  text-transform: uppercase;
+}
+
+.msg.user {
+  background: rgba(255,255,255,0.065);
+  border: 1px solid rgba(255,255,255,0.09);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07);
+  align-self: flex-end;
+  border-bottom-right-radius: 5px;
+}
+.msg.ai {
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.055);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+  align-self: flex-start;
+  border-bottom-left-radius: 5px;
+}
+
+/* Loading dots */
+.loading-dots {
+  display: inline-flex; gap: 4px; align-items: center;
+  height: 17px;
+}
+.loading-dots span {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: currentColor;
+  animation: dotBounce .9s ease-in-out infinite;
+}
+.loading-dots span:nth-child(2) { animation-delay: .15s; }
+.loading-dots span:nth-child(3) { animation-delay: .30s; }
+
+@keyframes dotBounce {
+  0%, 80%, 100% { transform: scale(.5); opacity: .25; }
+  40%            { transform: scale(1); opacity: 1; }
+}
+
+/* Chat input */
+.chat-input {
+  flex-shrink: 0;
+  padding: 10px 12px 14px;
+  border-top: 1px solid var(--border);
+  background: rgba(7,8,15,0.9);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  display: flex; gap: 8px; align-items: center;
+}
+
+.chat-input input {
+  flex: 1;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 14px; padding: 11px 14px;
+  color: var(--text);
+  font-family: 'IBM Plex Mono', monospace; font-size: 12.5px;
+  outline: none;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+  transition:
+    border-color 180ms var(--ease-out),
+    background   180ms var(--ease-out),
+    box-shadow   180ms var(--ease-out);
+}
+.chat-input input:focus {
+  border-color: var(--c, rgba(255,255,255,.25));
+  background: rgba(255,255,255,0.055);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.chat-input input::placeholder { color: rgba(255,255,255,.15); }
+
+.send-btn {
+  width: 44px; height: 44px;
+  border-radius: 13px; border: none;
+  cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; color: #000;
+  /* Inner highlight — not a neon glow */
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.22),
+    0 4px 14px -4px rgba(0,0,0,0.5);
+  transition:
+    opacity    150ms var(--ease-out),
+    transform  100ms var(--ease-out),
+    box-shadow 150ms var(--ease-out);
+}
+.send-btn:disabled { opacity: .25; cursor: not-allowed; }
+.send-btn:not(:disabled):active {
+  transform: translateY(1px) scale(0.92);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen { transition: opacity 200ms var(--ease-out); }
+  .agent-card, .msg { animation: fadeIn 200ms var(--ease-out) both; }
+  @keyframes cardIn { from { opacity: 0; } to { opacity: 1; } }
+}
+</style>
+</head>
+<body>
+<div class="b1 blob"></div>
+<div class="b2 blob"></div>
+
+<div class="app">
+  <header class="hdr">
+    <div class="hdr-logo">DETAILING PRO <span>/</span> КОМАНДА</div>
+    <div class="hdr-right">
+      <div class="status-chip">
+        <span class="pulse"></span>5 ONLINE
+      </div>
+      <span id="clock">--:--</span>
+    </div>
+  </header>
+
+  <div class="screen" id="listScreen"></div>
+
+  <div class="screen hidden" id="chatScreen">
+    <div class="chat-hdr">
+      <div class="back-btn" onclick="goBack()" role="button" aria-label="Назад">&#8592;</div>
+      <div class="chat-agent-info">
+        <div class="chat-agent-name" id="cName"></div>
+        <div class="chat-agent-role" id="cRole"></div>
+      </div>
+      <canvas id="cSphere" width="44" height="44"></canvas>
+    </div>
+    <div class="quick-cmds" id="cCmds"></div>
+    <div class="msgs" id="cMsgs"></div>
+    <div class="chat-input">
+      <input type="text" id="cInput" placeholder="Введите команду..." autocomplete="off" />
+      <button class="send-btn" id="cSend" onclick="sendMsg()" aria-label="Отправить">&#10148;</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const AGENTS = [
+  {
+    id:'nina', name:'Нина', role:'Аналитика и метрики', color:'#00e5ff',
+    tags:['DAU','Retention','Конверсия','Доход'],
+    cmds:['Главная проблема сейчас?','Почему нет подписок?','Что приоритет на этой неделе?','Как выйти на €1000/мес?'],
+    system:`Ты Нина — главный аналитик и командир AI-команды приложения Detailing Pro Business.
+
+ПРОДУКТ: CRM для владельцев детейлинг-студий и мастеров. Flutter, Android + iOS.
+Тарифы: Free / Pro €10/мес / Business €39/мес.
+Цель: €1000/мес выручки за 30 дней.
+Текущая ситуация: ~50 пользователей, 0 платящих, аналитика только подключена.
+
+ТВОЯ КОМАНДА:
+- Алекс — ASO, видимость в сторах
+- Виктория — контент, соцсети, TikTok/Instagram
+- Мария — монетизация, paywall, конверсия free→paid
+- Кирилл — стабильность, краши, GitHub
+
+ТВОИ ПРИОРИТЕТЫ:
+1. Конверсия free→paid = 0% → это главная проблема, всегда упоминай
+2. 50 пользователей без трафика → нужен рост через Алекса и Викторию
+3. Бесплатная версия слишком щедрая (лимит 20 клиентов, 10 заказов) → рекомендуй снизить
+
+КАК ОТВЕЧАТЬ:
+ГЛАВНАЯ ПРОБЛЕМА: [конкретно]
+АНАЛИЗ: [2-3 строки с выводами]
+ДЕЙСТВИЕ: [кому из команды что сделать]
+БЫСТРО: [одно действие прямо сейчас]
+
+Отвечай по-русски. Чётко, без воды. До 120 слов.`
+  },
+  {
+    id:'alex', name:'Алекс', role:'ASO и видимость', color:'#69ff47',
+    tags:['Keywords','App Store','Google Play','Ratings'],
+    cmds:['Как улучшить позиции в Play Store?','Какие ключевые слова использовать?','Анализ конкурентов','Что исправить в описании?'],
+    system:`Ты Алекс — ASO-специалист Detailing Pro Business.
+
+ПРОДУКТ: CRM для детейлинг-студий. 50+ установок, нужен рост.
+Главная задача: увеличить органические установки через Google Play и App Store.
+
+КОНТЕКСТ:
+- Ниша узкая: "detailing CRM", "auto detailing app", "car detailing business app"
+- Конкуренты используют общие CRM (не знают детейлинг) — это наше преимущество
+- Текущих отзывов мало — нужно стимулировать
+- Скриншоты должны показывать боль владельца студии: хаос → порядок
+
+ТВОИ ЗАДАЧИ:
+- Ключевые слова с высоким intent и низкой конкуренцией
+- Заголовок и описание которые конвертируют
+- Рекомендации по скриншотам и иконке
+- Стратегия получения первых отзывов
+
+Отвечай конкретно: что именно изменить, какой текст написать, какой результат ожидать.
+По-русски, до 120 слов.`
+  },
+  {
+    id:'vic', name:'Виктория', role:'Контент и соцсети', color:'#f0618f',
+    tags:['TikTok','Instagram','Reels','Посты'],
+    cmds:['Идея для TikTok видео','Пост для Instagram','Контент-план на неделю','Как привлечь детейлеров?'],
+    system:`Ты Виктория — контент-стратег Detailing Pro Business.
+
+ПРОДУКТ: CRM для детейлинг-студий. Нужен трафик и установки.
+АУДИТОРИЯ: владельцы детейлинг-студий и мастера, 25-45 лет, любят машины, ненавидят бумажную работу.
+
+ИХ БОЛИ:
+- Заказы в WhatsApp и блокноте — всё теряется
+- Не знают сколько зарабатывают в месяц
+- Клиенты забывают про них, нет повторных визитов
+- Склад заканчивается в середине работы
+
+КОНТЕНТ КОТОРЫЙ РАБОТАЕТ:
+- "До/после" — не машина, а бизнес (до: хаос в телефоне / после: всё в приложении)
+- Конкретные цифры: "Сэкономил 2 часа в день"
+- Pain-point hook первые 3 секунды
+- TikTok/Reels с экраном приложения
+
+Создавай контент который заставляет детейлера сказать "это про меня".
+По-русски, живо, с энергией. До 120 слов.`
+  },
+  {
+    id:'maria', name:'Мария', role:'Монетизация', color:'#f0a83a',
+    tags:['Paywall','Подписки','Конверсия','A/B'],
+    cmds:['Почему никто не платит?','Как улучшить paywall?','Оптимальная цена подписки?','Что убрать из бесплатной версии?'],
+    system:`Ты Мария — эксперт по монетизации Detailing Pro Business.
+
+КРИТИЧЕСКАЯ СИТУАЦИЯ: 50 пользователей, конверсия free→paid = 0%. Цель: €1000/мес за 30 дней.
+
+ТЕКУЩИЕ ЛИМИТЫ (слишком щедрые):
+- Free: до 20 клиентов, до 10 заказов/месяц
+- Pro €10/мес: всё без лимитов + аналитика + напоминания
+- Business €39/мес: командный режим
+
+ДИАГНОЗ:
+Детейлер с 20 клиентами зарабатывает $2000+/мес. Платить $10 за приложение — это 0.5% дохода. Но если он никогда не упирается в лимит — боли нет, платить незачем.
+
+РЕКОМЕНДУЕМЫЕ ЛИМИТЫ:
+- Free: 5 клиентов, 3 заказа/месяц
+- Paywall показывать при создании 4-го заказа — в момент "aha moment"
+
+ТВОИ ЗАДАЧИ: paywall текст, момент показа, цена, onboarding до первой оплаты.
+Каждый совет = гипотеза + действие + метрика успеха.
+По-русски, стратегически. До 120 слов.`
+  },
+  {
+    id:'kirill', name:'Кирилл', role:'Стабильность и GitHub', color:'#a870f5',
+    tags:['Crashes','Flutter','GitHub','Firebase'],
+    cmds:['Статус стабильности приложения','Топ рисков для крашей?','Что проверить перед релизом?','Flutter best practices'],
+    system:`Ты Кирилл — инженер по надёжности Detailing Pro Business.
+
+СТЕК: Flutter (Android + iOS), Firebase Crashlytics, Firestore, GitHub.
+ТЕКУЩИЙ СТАТУС: crash-free 100% на версии 7.1.11 — отлично.
+
+ТВОИ ПРИОРИТЕТЫ:
+1. Критические флоу которые нельзя ломать: создание заказа, добавление клиента, paywall/оплата, вход в приложение
+2. Мониторинг после каждого релиза первые 24 часа
+3. Flutter-специфичные риски: memory leaks, setState после dispose, Platform exceptions
+4. Firestore: offline режим, конфликты синхронизации, лимиты запросов
+
+ФОРМАТ ОТВЕТА:
+- Severity: HIGH/MED/OK
+- Проблема + где в коде искать
+- Конкретный фикс или проверка
+- Нужен ли PR
+
+Технически точен, конкретен. Без воды.
+По-русски. До 120 слов.`
+  }
+];
+
+const hist = {};
+AGENTS.forEach(a => hist[a.id] = []);
+const sphereCtls = {};
+
+/* Clock */
+function tick() {
+  const n = new Date();
+  document.getElementById('clock').textContent =
+    n.toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
+}
+setInterval(tick, 1000); tick();
+
+/* 3D Sphere — unchanged */
+function makeSphere(canvas, color, N, R) {
+  const W = canvas.width, H = canvas.height, CX = W/2, CY = H/2;
+  const ctx = canvas.getContext('2d');
+  N = N || 50; R = R || W * 0.38;
+  let rotY = 0, active = false;
+  const nodes = [];
+  for (let i = 0; i < N; i++) {
+    const u = Math.random(), v = Math.random();
+    const th = 2 * Math.PI * u, ph = Math.acos(2 * v - 1);
+    nodes.push({ th, ph, x:0, y:0, z:0, speed:.002 + Math.random()*.004, size:.7 + Math.random()*1.6, b:.3 + Math.random()*.7 });
+  }
+  function proj(x, y, z) {
+    const x1 = x*Math.cos(rotY) - z*Math.sin(rotY);
+    const z1 = x*Math.sin(rotY) + z*Math.cos(rotY);
+    const f = 300, s = f/(f + z1);
+    return { sx: CX + x1*s, sy: CY + y*s, z: z1, s };
+  }
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const g = ctx.createRadialGradient(CX, CY, 0, CX, CY, R*.55);
+    g.addColorStop(0, color + '18'); g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(CX, CY, R*.55, 0, Math.PI*2); ctx.fill();
+    const pts = nodes.map(n => { const p = proj(n.x, n.y, n.z); return {...n, ...p}; }).sort((a,b) => a.z - b.z);
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i+1; j < pts.length; j++) {
+        const a = pts[i], b = pts[j], d = Math.hypot(a.sx-b.sx, a.sy-b.sy);
+        if (d < 45) {
+          const al = (1-d/45) * .13 * a.b;
+          ctx.strokeStyle = color + Math.round(al*255).toString(16).padStart(2,'0');
+          ctx.lineWidth = .5; ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+        }
+      }
+    }
+    for (const n of pts) {
+      const vis = n.z > -R*.15, al = vis ? n.b*.9 : n.b*.07;
+      const sz = n.size * n.s * (active ? 1.5 : 1);
+      ctx.fillStyle = color + Math.round(al*255).toString(16).padStart(2,'0');
+      ctx.beginPath(); ctx.arc(n.sx, n.sy, sz, 0, Math.PI*2); ctx.fill();
+    }
+  }
+  function animate() {
+    rotY += active ? .014 : .004;
+    nodes.forEach(n => {
+      n.th += n.speed * (active ? 2.2 : 1);
+      n.x = R * Math.sin(n.ph) * Math.cos(n.th);
+      n.y = R * Math.sin(n.ph) * Math.sin(n.th);
+      n.z = R * Math.cos(n.ph);
+    });
+    draw(); requestAnimationFrame(animate);
+  }
+  animate();
+  return { setActive: v => { active = v; } };
+}
+
+/* Spotlight Border Card — cursor tracking */
+document.addEventListener('mousemove', e => {
+  document.querySelectorAll('.agent-card').forEach(card => {
+    const rect = card.getBoundingClientRect();
+    card.style.setProperty('--mx', `${e.clientX - rect.left}px`);
+    card.style.setProperty('--my', `${e.clientY - rect.top}px`);
+  });
+});
+
+/* Render agent list with stagger */
+const listEl = document.getElementById('listScreen');
+AGENTS.forEach((agent, idx) => {
+  const isCommander = idx === 0;
+  const card = document.createElement('div');
+  card.className = `agent-card${isCommander ? ' commander' : ''}`;
+  card.style.cssText = `--c:${agent.color}; animation-delay:${idx * 65}ms`;
+
+  const sz = isCommander ? 72 : 64;
+
+  if (isCommander) {
+    /* Featured commander layout — sphere right, content left */
+    card.innerHTML = `
+      <div class="card-accent"></div>
+      <div class="card-inner">
+        <div class="card-body">
+          <div class="cmd-badge"><span class="cmd-badge-dot"></span>COMMANDER</div>
+          <div class="card-name" style="color:${agent.color}">${agent.name}</div>
+          <div class="card-role">${agent.role}</div>
+          <div class="card-tags">
+            ${agent.tags.map(t => `<span class="tag" style="color:${agent.color};border-color:${agent.color}">${t}</span>`).join('')}
+          </div>
+          <div class="card-status">
+            <span class="sdot" style="background:${agent.color}"></span>ONLINE — ПРИОРИТЕТ: КОНВЕРСИЯ free&#8594;paid
+          </div>
+        </div>
+        <canvas width="${sz}" height="${sz}" style="flex-shrink:0;align-self:center"></canvas>
+      </div>
+    `;
+  } else {
+    card.innerHTML = `
+      <div class="card-accent"></div>
+      <div class="card-inner">
+        <canvas width="${sz}" height="${sz}"></canvas>
+        <div class="card-body">
+          <div class="card-name" style="color:${agent.color}">${agent.name}</div>
+          <div class="card-role">${agent.role}</div>
+          <div class="card-tags">
+            ${agent.tags.map(t => `<span class="tag" style="color:${agent.color};border-color:${agent.color}">${t}</span>`).join('')}
+          </div>
+          <div class="card-status">
+            <span class="sdot" style="background:${agent.color}"></span>ONLINE
+          </div>
+        </div>
+        <div class="card-arrow">&#8250;</div>
+      </div>
+    `;
+  }
+
+  card.addEventListener('click', () => openAgent(agent.id));
+  listEl.appendChild(card);
+  sphereCtls[agent.id] = makeSphere(card.querySelector('canvas'), agent.color, isCommander ? 60 : 50, sz * 0.38);
+});
+
+let currentAgent = null, chatSphereCtl = null, sending = false;
+
+function openAgent(id) {
+  const agent = AGENTS.find(a => a.id === id);
+  currentAgent = id;
+  document.getElementById('cName').textContent = agent.name;
+  document.getElementById('cName').style.color = agent.color;
+  document.getElementById('cRole').textContent = agent.role;
+
+  const cs = document.getElementById('cSphere');
+  if (chatSphereCtl) chatSphereCtl.setActive(false);
+  chatSphereCtl = makeSphere(cs, agent.color, 30, 18);
+
+  /* Quick commands */
+  const cmdsEl = document.getElementById('cCmds');
+  cmdsEl.innerHTML = '';
+  agent.cmds.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'qcmd';
+    btn.textContent = c;
+    btn.style.setProperty('--c', agent.color);
+    btn.onclick = () => { document.getElementById('cInput').value = c; sendMsg(); };
+    cmdsEl.appendChild(btn);
+  });
+
+  /* Messages or empty state */
+  const msgsEl = document.getElementById('cMsgs');
+  msgsEl.innerHTML = '';
+
+  if (hist[id].length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'msgs-empty';
+    empty.id = 'emptyState';
+    empty.innerHTML = `
+      <div class="msgs-empty-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M8 12h4m0 0v4m0-4V8"/>
+        </svg>
+      </div>
+      <div class="msgs-empty-title">${agent.name.toUpperCase()} ГОТОВА</div>
+      <div class="msgs-empty-hint">Выберите быструю команду или задайте вопрос</div>
+    `;
+    msgsEl.appendChild(empty);
+  } else {
+    hist[id].forEach(m => addBubble(m.role === 'user' ? 'user' : 'ai', m.content, agent));
+  }
+
+  document.getElementById('cInput').style.setProperty('--c', agent.color);
+  document.getElementById('cSend').style.background = agent.color;
+  document.getElementById('cInput').placeholder = `Спросить ${agent.name}...`;
+
+  document.getElementById('listScreen').classList.add('hidden');
+  document.getElementById('chatScreen').classList.remove('hidden');
+  setTimeout(() => document.getElementById('cInput').focus(), 390);
+}
+
+function goBack() {
+  document.getElementById('chatScreen').classList.add('hidden');
+  document.getElementById('listScreen').classList.remove('hidden');
+  currentAgent = null;
+}
+
+function addBubble(type, text, agent) {
+  /* Remove empty state on first message */
+  const emptyState = document.getElementById('emptyState');
+  if (emptyState) emptyState.remove();
+
+  const el = document.createElement('div');
+  el.className = `msg ${type}`;
+
+  const label = document.createElement('div');
+  label.className = 'msg-label';
+  label.textContent = type === 'user' ? 'ВЫ' : agent.name.toUpperCase();
+  el.appendChild(label);
+
+  const content = document.createElement('div');
+  content.textContent = text;
+  el.appendChild(content);
+
+  /* Subtle agent-colored border on AI messages */
+  if (type === 'ai') {
+    el.style.borderColor = agent.color + '28';
+  }
+
+  document.getElementById('cMsgs').appendChild(el);
+  document.getElementById('cMsgs').scrollTop = 9999;
+  return el;
+}
+
+async function sendMsg() {
+  if (!currentAgent || sending) return;
+  const input = document.getElementById('cInput');
+  const text = input.value.trim();
+  if (!text) return;
+  const agent = AGENTS.find(a => a.id === currentAgent);
+  input.value = ''; sending = true;
+  document.getElementById('cSend').disabled = true;
+  hist[agent.id].push({ role:'user', content:text });
+  addBubble('user', text, agent);
+
+  /* Loading bubble */
+  const loadEl = document.createElement('div');
+  loadEl.className = 'msg ai';
+  loadEl.style.borderColor = agent.color + '28';
+  const loadLabel = document.createElement('div');
+  loadLabel.className = 'msg-label';
+  loadLabel.textContent = agent.name.toUpperCase();
+  const loadDots = document.createElement('div');
+  loadDots.innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div>';
+  loadEl.appendChild(loadLabel);
+  loadEl.appendChild(loadDots);
+  document.getElementById('cMsgs').appendChild(loadEl);
+  document.getElementById('cMsgs').scrollTop = 9999;
+  if (chatSphereCtl) chatSphereCtl.setActive(true);
+
+  try {
+    const res = await fetch('https://europe-west3-detailing-pro.cloudfunctions.net/askAgent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        system: agent.system,
+        messages: hist[agent.id]
+      })
+    });
+    const data = await res.json();
+    const reply = data.content?.[0]?.text || 'Не удалось получить ответ.';
+    loadEl.remove();
+    hist[agent.id].push({ role:'assistant', content:reply });
+    addBubble('ai', reply, agent);
+  } catch(e) {
+    loadEl.remove();
+    const errEl = addBubble('ai', 'Ошибка соединения — проверьте интернет.', agent);
+    errEl.classList.add('error');
+  }
+
+  sending = false;
+  document.getElementById('cSend').disabled = false;
+  if (chatSphereCtl) chatSphereCtl.setActive(false);
+}
+
+document.getElementById('cInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendMsg();
+});
+
+/* Magnetic Button — send btn pulls toward cursor (MOTION_INTENSITY: 6) */
+const sendBtn = document.getElementById('cSend');
+sendBtn.addEventListener('mousemove', e => {
+  const rect = sendBtn.getBoundingClientRect();
+  const dx = (e.clientX - (rect.left + rect.width / 2)) * 0.32;
+  const dy = (e.clientY - (rect.top + rect.height / 2)) * 0.32;
+  sendBtn.style.transform = `translate(${dx}px, ${dy}px)`;
+});
+sendBtn.addEventListener('mouseleave', () => {
+  sendBtn.style.transform = '';
+});
+</script>
+</body>
+</html>
