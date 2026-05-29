@@ -2998,6 +2998,87 @@ exports.resetMonthlyEmailCounters = onSchedule(
   },
 );
 
+// ── getAppSnapshot ────────────────────────────────────────────────────────────
+// Агрегирует реальные метрики приложения для AI-агентов и дашбордов
+exports.getAppSnapshot = onRequest(
+  {
+    region: REGION,
+    memory: "256MiB",
+    maxInstances: 5,
+    invoker: "public",
+  },
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    if (req.method === "OPTIONS") {
+      res.set("Access-Control-Allow-Methods", "GET");
+      res.set("Access-Control-Allow-Headers", "Content-Type");
+      res.status(204).send("");
+      return;
+    }
+
+    try {
+      const db = admin.firestore();
+
+      const [orgsSnap, usersCount] = await Promise.all([
+        db.collection("organizations").get(),
+        db.collection("users").count().get(),
+      ]);
+
+      let totalOrgs = 0;
+      let totalClients = 0;
+      let totalActiveOrders = 0;
+      const planDist = {free: 0, pro: 0, business: 0};
+
+      orgsSnap.forEach((doc) => {
+        const d = doc.data();
+        totalOrgs++;
+        totalClients += d.clientCount || 0;
+        totalActiveOrders += d.activeOrdersThisMonthCount || 0;
+        const plan = String(d.plan || "free").toLowerCase();
+        if (plan === "pro") planDist.pro++;
+        else if (plan === "business") planDist.business++;
+        else planDist.free++;
+      });
+
+      const totalUsers = usersCount.data().count;
+      const paying = planDist.pro + planDist.business;
+      const conversionRate = totalOrgs > 0
+        ? ((paying / totalOrgs) * 100).toFixed(1)
+        : "0";
+
+      res.status(200).json({
+        timestamp: new Date().toISOString(),
+        users: {
+          total: totalUsers,
+          orgs: totalOrgs,
+        },
+        plans: {
+          free: planDist.free,
+          pro: planDist.pro,
+          business: planDist.business,
+          paying,
+          conversionRate: `${conversionRate}%`,
+        },
+        activity: {
+          totalClients,
+          totalActiveOrdersThisMonth: totalActiveOrders,
+          avgClientsPerOrg: totalOrgs > 0
+            ? (totalClients / totalOrgs).toFixed(1)
+            : "0",
+        },
+        revenue: {
+          estimated: `€${planDist.pro * 10 + planDist.business * 39}`,
+          proSubscribers: planDist.pro,
+          businessSubscribers: planDist.business,
+        },
+      });
+    } catch (error) {
+      logger.error("getAppSnapshot failed", {error: String(error)});
+      res.status(500).json({error: "internal"});
+    }
+  },
+);
+
 exports.revenueCatWebhook = onRequest(
   {
     region: REGION,
