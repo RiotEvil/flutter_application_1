@@ -24,7 +24,7 @@
     }
   ],
   "hosting": {
-    "public": "build/web",
+    "public": "public",
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -32,23 +32,13 @@
     ],
     "headers": [
       {
-        "source": "/book.html",
+        "source": "**/*.html",
         "headers": [
           {
             "key": "Cache-Control",
             "value": "no-store, max-age=0"
           }
         ]
-      }
-    ],
-    "rewrites": [
-      {
-        "source": "/book.html",
-        "destination": "/book.html"
-      },
-      {
-        "source": "**",
-        "destination": "/index.html"
       }
     ]
   },
