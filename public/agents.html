@@ -98,6 +98,22 @@ body::before {
   font-size: 8.5px; letter-spacing: .1em;
 }
 
+.snapshot-chip {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  color: var(--muted);
+  font-size: 8.5px; letter-spacing: .08em;
+  transition: border-color 300ms var(--ease-out), color 300ms var(--ease-out), background 300ms var(--ease-out);
+}
+.snapshot-chip.loaded {
+  border-color: rgba(0,229,255,0.18);
+  background: rgba(0,229,255,0.05);
+  color: #00e5ff;
+}
+
 .pulse {
   width: 5px; height: 5px; border-radius: 50%;
   background: #69ff47;
@@ -535,6 +551,7 @@ body::before {
   <header class="hdr">
     <div class="hdr-logo">DETAILING PRO <span>/</span> КОМАНДА</div>
     <div class="hdr-right">
+      <div class="snapshot-chip" id="snapshotChip">ЗАГРУЗКА...</div>
       <div class="status-chip">
         <span class="pulse"></span>5 ONLINE
       </div>
@@ -695,6 +712,42 @@ const AGENTS = [
 const hist = {};
 AGENTS.forEach(a => hist[a.id] = []);
 const sphereCtls = {};
+
+/* ── getAppSnapshot — реальные данные из Firebase ── */
+const SNAPSHOT_URL = 'https://europe-west3-detailing-pro.cloudfunctions.net/getAppSnapshot';
+
+function buildSnapshotBlock(s) {
+  const t = new Date(s.timestamp).toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+  return `\nАКТУАЛЬНЫЕ ДАННЫЕ ИЗ FIREBASE (обновлено ${t}):
+- Пользователей: ${s.users.total}, организаций: ${s.users.orgs}
+- Тарифы: Free ${s.plans.free} / Pro ${s.plans.pro} / Business ${s.plans.business}
+- Платящих: ${s.plans.paying}, конверсия free→paid: ${s.plans.conversionRate}
+- Клиентов в системе: ${s.activity.totalClients} (среднее на орг: ${s.activity.avgClientsPerOrg})
+- Активных заказов (этот месяц): ${s.activity.totalActiveOrdersThisMonth}
+- Расчётная выручка: ${s.revenue.estimated}
+Используй эти цифры — они реальные, не хардкод.\n`;
+}
+
+async function fetchSnapshot() {
+  const chip = document.getElementById('snapshotChip');
+  try {
+    const res = await fetch(SNAPSHOT_URL);
+    if (!res.ok) throw new Error(res.status);
+    const s = await res.json();
+
+    /* Инжектируем реальные данные в system-промпт каждого агента */
+    const block = buildSnapshotBlock(s);
+    AGENTS.forEach(agent => { agent.systemLive = block + agent.system; });
+
+    /* Обновляем UI — показываем конверсию */
+    chip.textContent = `LIVE ${s.plans.conversionRate} conv`;
+    chip.classList.add('loaded');
+  } catch(e) {
+    chip.textContent = 'ДАННЫЕ НЕДОСТУПНЫ';
+  }
+}
+
+fetchSnapshot();
 
 /* Clock */
 function tick() {
@@ -945,7 +998,7 @@ async function sendMsg() {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 1000,
-        system: agent.system,
+        system: agent.systemLive || agent.system,
         messages: hist[agent.id]
       })
     });
